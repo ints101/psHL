@@ -1,4 +1,4 @@
-param (
+﻿param (
     [string]$baseurl,
     [string]$wl,
     [string]$method,
@@ -85,6 +85,7 @@ $results5xx = @('Found the following pages with a status code 5xx:')
 
 # Main logic based on data input
 foreach ($line in $wordlist) {
+
     # Extract prefix from URL
     $httpPrefix = $baseurl.Substring(4, 1)
 
@@ -143,16 +144,32 @@ if ($PSVersiontable.PSVersion.Major -lt 6) {
     # Try to make the web request
     try { 
         $response = Invoke-WebRequest @requestParams
-        $StatusCode = [int]$response.Statuscode
-        $ContentLen = $response.Headers["Content-Length"]
 
-        #Try to extract status code from the raw content if all else fails
+        #Get status code
+        $StatusCode = $response.Statuscode
+
+        #Try to extract status code from the raw content if previous step fails
         if ($StatusCode -eq "" ) {
         $response2 = (Invoke-WebRequest @requestParams).RawContent
         $StatusCode = [regex]::Match($response2, 'HTTP/\d+(\.\d+)?\s+(\d{3})').Groups[2].Value
         }
 
-        #Printing output
+        #Read Content-Length header
+        $ContentLen = $response.Headers["Content-Length"]
+
+        #If there's no header ,read from response
+        if ($ContentLen -eq $null -or $ContentLen -eq "") {
+            $ContentLen = $response.Content.Length
+
+        #Fuckit, just give up
+         if ($ContentLen -eq "" -or $ContentLen -eq $null) {
+            $ContentLen = "N/A"
+            }
+         }
+        
+         
+
+        #Set color and print output
         $color = GetColor $StatusCode
         Write-Host "Method: $method  | Status Code: $StatusCode | Content Length: $ContentLen | Requested URL: $requestedUrl  "-ForegroundColor $color
         Write-Output ""
@@ -165,14 +182,40 @@ if ($PSVersiontable.PSVersion.Major -lt 6) {
         if ($StatusCode -ge 300 -and $StatusCode -lt 400) {
             $results3xx += $requestedUrl
         }
+
+        #Have to reset the variable. Don't know why
         $ContentLen = $null
-        $StatusCode = $null
+        
 
     }
     catch {
+        #Get the status code from exception response
         $StatusCode = $_.Exception.Response.StatusCode.Value__
 
+        #Give up if unsuccesful
+        if ($StatusCode -eq "" -or $StatusCode -eq $null) {
+            $StatusCode = "N/A"
+            }
+
+        #Getting the content length from error response stream
+        if ($_.Exception.Response -ne $null -and $_.Exception.Response.GetResponseStream() -ne $null) {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $reader.BaseStream.Position = 0
+        $reader.DiscardBufferedData()
+        $responseContent = $reader.ReadToEnd()
+        $ContentLen = $responseContent.Length
+        }
+
+        #Give up if unsuccesful
+        if ($ContentLen -eq "" -or $ContentLen -eq $null) {
+            $ContentLen = "N/A"
+            }
+
         #Saving the results
+        if ($StatusCode -ge 300 -and $StatusCode -lt 400) {
+            $results3xx += $requestedUrl
+        }
+
         if ($StatusCode -ge 400 -and $StatusCode -lt 500) {
             $results4xx += $requestedUrl
         }
@@ -181,9 +224,11 @@ if ($PSVersiontable.PSVersion.Major -lt 6) {
             $results5xx += $requestedUrl
         }
 
-        #Printing output
+        
+
+        #Set color and print output
         $color = GetColor $StatusCode
-        Write-Host "Method: $method | Status Code: $StatusCode | Content Length: N/A | Requested URL: $requestedUrl" -ForegroundColor $color
+        Write-Host "Method: $method | Status Code: $StatusCode | Content Length: $ContentLen | Requested URL: $requestedUrl" -ForegroundColor $color
         Write-Output ""
     }
 }
@@ -193,13 +238,25 @@ if ($PSVersiontable.PSVersion.Major -lt 6) {
 
 if ($PSVersiontable.PSVersion.Major -ge 6) {
     try {
+
+        #Using SkipHttpErrorCheck. Try block should handle all responses. Even error codes.
         if ($PSVersiontable.PSVersion.Major -ge 7){
          $response = Invoke-WebRequest @requestParams -SkipCertificateCheck -SkipHttpErrorCheck
          }
+         #If PS version does not support SkipHttpErrorCheck, skippidy skip the cert check only
          else {
          $response = Invoke-WebRequest @requestParams -SkipCertificateCheck
          }
-         $StatusCode = $response.StatusCode
+
+        #Get status code
+        $StatusCode = $response.StatusCode
+
+        #Try to extract status code from the raw content if all else fails
+        if ($StatusCode -eq "" ) {
+        $response2 = (Invoke-WebRequest @requestParams).RawContent
+        $StatusCode = [regex]::Match($response2, 'HTTP/\d+(\.\d+)?\s+(\d{3})').Groups[2].Value
+        }
+
          $color = GetColor $StatusCode
 
         #Saving the results
@@ -217,26 +274,58 @@ if ($PSVersiontable.PSVersion.Major -ge 6) {
         }
         
          $ContentLen = $response.Headers["Content-Length"]
+
+         if ($ContentLen -eq $null -or $ContentLen -eq "") {
+            $ContentLen = $response.Content.Length
+            }
+
          Write-Host "Method: $method | Status Code: $StatusCode | Content Length: $ContentLen | Requested URL: $requestedUrl " -ForegroundColor $color
          Write-Output ""
          $ContentLen = $null
     } 
     catch {
-          $color = GetColor $_.Exception.Response.StatusCode
-          $StatusCode = $_.Exception.Response.StatusCode
+        #Get the status code from exception response
+        $StatusCode = $_.Exception.Response.StatusCode.Value__
+
+        #Give up if unsuccesful
+        if ($StatusCode -eq "" -or $StatusCode -eq $null) {
+            $StatusCode = "N/A"
+            }
+
+        #Getting the content length from error response stream
+        if ($_.Exception.Response -ne $null -and $_.Exception.Response.GetResponseStream() -ne $null) {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $reader.BaseStream.Position = 0
+        $reader.DiscardBufferedData()
+        $responseContent = $reader.ReadToEnd()
+        $ContentLen = $responseContent.Length
+        }
+
+        #Give up if unsuccesful
+        if ($ContentLen -eq "" -or $ContentLen -eq $null) {
+            $ContentLen = "N/A"
+            }
+
 
         #Saving the results
         if ($StatusCode -ge 300 -and $StatusCode -lt 400) {
             $results3xx += $requestedUrl
         }
+
         if ($StatusCode -ge 400 -and $StatusCode -lt 500) {
             $results4xx += $requestedUrl
         }
-        if ($StatusCode -ge 500 -and $StatusCode -lt 600) {
+
+         if ($StatusCode -ge 500 -and $StatusCode -lt 600) {
             $results5xx += $requestedUrl
         }
-          Write-Host "Method: $method | Status Code: $($_.Exception.Response.StatusCode.Value__) | Content Length: N/A | Requested URL: $requestedUrl  " -ForegroundColor $color
-          Write-Output ""
+
+        
+
+        #Set color and print output
+        $color = GetColor $StatusCode
+        Write-Host "Method: $method | Status Code: $StatusCode | Content Length: $ContentLen | Requested URL: $requestedUrl" -ForegroundColor $color
+        Write-Output ""
     }
 }
 }
