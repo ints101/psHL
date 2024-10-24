@@ -20,7 +20,7 @@ if ($baseurl -eq "") {
 }
 
 # Add trailing forward slash to URL if missing
-if (($baseurl -notmatch '/$') -and ($baseurl -ne "") -and ($subdm -ne $true)) {
+if (($baseurl -notmatch '/$|=$|\?$|&$')  -and ($baseurl -ne "") -and ($subdm -ne $true)) {
     $baseurl += "/"
 }
 
