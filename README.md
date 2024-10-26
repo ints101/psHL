@@ -2,7 +2,7 @@
  when You need to use Powershell to scan a Web server.<br>
  It's a loop that uses the Invoke-WebRequest cmdlet to send HTTP requests.<br>
  You can use a wordlist to fuzz Web directories, pages, or subdomains. There is no recursion.<br>
- Tested on Powershell 5 and 7. Doesn't seem to work in Powershell 6.<br>
+ Tested in Powershell 5 and 7. Doesn't seem to work in Powershell 6.<br>
  Takes the following arguments:<br>
 <br>
 <br>
